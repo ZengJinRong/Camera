@@ -1,9 +1,5 @@
 package edu.fzu.camera;
 
-/**
- * @author Jose Davis Nidhin
- */
-
 import android.content.Context;
 import android.hardware.Camera;
 import android.hardware.Camera.Size;
