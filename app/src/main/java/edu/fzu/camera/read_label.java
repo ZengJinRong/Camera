@@ -66,6 +66,7 @@ public class read_label {
 
     public String detect(Bitmap bitmap) {
         int[] pixels = new int[INPUT_SIZE * INPUT_SIZE];
+        //FIXME:测试阶段限制像素获取的大小
         bitmap.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE);
         //byte[] byteInput = new byte[pixels.length];
 /*        for (int i = 0; i < pixels.length; ++i) {
@@ -75,6 +76,7 @@ public class read_label {
         }
         */
         inferenceInterface.feed("layer0-bn/bn0/Const:0", pixels, 1, INPUT_SIZE, INPUT_SIZE);
+        //FIXME
         inferenceInterface.run(new String[]{"layer14-output/add:0"}, false);
 //        float[] boxes = new float[MAX_RESULTS * 4];
 //        float[] scores = new float[MAX_RESULTS];
