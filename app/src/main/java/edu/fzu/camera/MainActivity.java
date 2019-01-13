@@ -1,13 +1,18 @@
 package edu.fzu.camera;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.hardware.Camera;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Environment;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.SurfaceView;
@@ -20,9 +25,9 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
@@ -31,6 +36,9 @@ public class MainActivity extends AppCompatActivity {
     Camera camera;
     Activity act;
     Context ctx;
+    private Executor executor = Executors.newSingleThreadExecutor();
+    private read_label detector;
+
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -41,6 +49,10 @@ public class MainActivity extends AppCompatActivity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         setContentView(R.layout.activity_main);
+
+    /* 6.0以上都需要手动添加动态权限 */
+        ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
 
         preview = new Preview(this, (SurfaceView) findViewById(R.id.surfaceView));
         preview.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -64,6 +76,14 @@ public class MainActivity extends AppCompatActivity {
                 camera.takePicture(shutterCallback, rawCallback, jpegCallback);
             }
         });
+
+        detector = new read_label("label.txt", "hcr.pb", getAssets());
+//        detector = new read_label("labels.txt", "model2.pb", getAssets());
+        try {
+            detector.load();
+        } catch (IOException e) {
+            Toast.makeText(getApplicationContext(), "加载失败", Toast.LENGTH_SHORT).show();
+        }
 
     }
 
@@ -99,15 +119,10 @@ public class MainActivity extends AppCompatActivity {
         preview.setCamera(camera);
     }
 
-    private void refreshGallery(File file) {
-        Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-        mediaScanIntent.setData(Uri.fromFile(file));
-        sendBroadcast(mediaScanIntent);
-    }
-
     Camera.ShutterCallback shutterCallback = new Camera.ShutterCallback() {
         @Override
         public void onShutter() {
+
         }
     };
 
@@ -121,47 +136,21 @@ public class MainActivity extends AppCompatActivity {
     Camera.PictureCallback jpegCallback = new Camera.PictureCallback() {
         @Override
         public void onPictureTaken(byte[] data, Camera camera) {
-            new SaveImageTask().execute(data);
+            final Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+            executor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    //TODO: 拍照之后的动作
+                    String res = detector.detect(bitmap);
+                    Intent intent = new Intent(MainActivity.this, MsgActivity.class);
+                    intent.putExtra("msg", res);
+                    startActivity(intent);
+                }
+
+            });
+
             resetCamera();
             Log.d(TAG, "onPictureTaken - jpeg");
-
-            //TODO: 拍照之后的动作
-            Intent intent = new Intent(MainActivity.this, MsgActivity.class);
-            intent.putExtra("msg", "——————测试文本——————\n吃葡萄不吐葡萄皮\n1\n2\n3\n4\n5\n6\n7\n8\n9\n——————测试文本——————");
-            startActivity(intent);
         }
     };
-
-    private class SaveImageTask extends AsyncTask<byte[], Void, Void> {
-
-        @Override
-        protected Void doInBackground(byte[]... data) {
-            FileOutputStream outStream;
-
-            // Write to SD Card
-            try {
-                File sdCard = Environment.getExternalStorageDirectory();
-                File dir = new File(sdCard.getAbsolutePath() + "/camera");
-                dir.mkdirs();
-
-                String fileName = String.format("%d.jpg", System.currentTimeMillis());
-                File outFile = new File(dir, fileName);
-
-                outStream = new FileOutputStream(outFile);
-                outStream.write(data[0]);
-                outStream.flush();
-                outStream.close();
-
-                Log.d(TAG, "onPictureTaken - wrote bytes: " + data.length + " to " + outFile.getAbsolutePath());
-
-                refreshGallery(outFile);
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return null;
-        }
-
-    }
 }
